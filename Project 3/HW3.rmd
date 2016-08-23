@@ -1,0 +1,572 @@
+---
+output: html_document
+---
+#ASSIGNMENT 3 Unsupervised Learning
+##Di Wang
+##902915079
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+install.packages("scatterplot3d")
+install.packages("gridExtra")
+install.packages("corrplot")
+install.packages("ggplot2")
+install.packages("EMCluster")
+install.packages("mclust")
+install.packages("EMCluster")
+install.packages("stats")
+install.packages("ica")
+install.packages("moments")
+
+library(stats)
+library(scatterplot3d)
+library(gridExtra)
+library(corrplot)
+library(ggplot2)
+library(mclust)
+library(EMCluster)
+library(stats)
+library(ica)
+library(moments)
+```
+
+## Read Data
+```{r}
+ConcreteData <- read.csv("ConcreteData.csv")
+Voting <- read.csv("Congressional Voting Records Data Set.csv")
+
+C_source <- ConcreteData[1:8]
+v_source <- Voting[2:17]
+```
+
+```{r}
+# To see the natural of the data
+
+M1 <- cor(ConcreteData)
+M2 <- cor(Voting)
+
+corrplot(M1,method = "circle")
+corrplot(M2,method = "circle")
+#Republican = 1, democratic =0
+```
+
+# Clustering of the data Using K-mean
+# Concrete Part
+```{r}
+strength_z <- as.data.frame(lapply(C_source,scale))
+ptm <- proc.time()
+strength_clusters <- kmeans(strength_z,3)
+proc.time() - ptm
+
+strength_clusters$size
+strength_clusters$centers
+strength_clusters$tot.withinss
+strength_clusters$betweenss
+
+classError(strength_clusters$cluster, ConcreteData$Class)
+adjustedRandIndex(strength_clusters$cluster, ConcreteData$Class)
+
+ccent <- function(cl) {
+  f <- function(i) colMeans(ConcreteData[cl == i,])
+  x <- sapply(sort(unique(cl)), f)
+  colnames(x) <- sort(unique(cl))
+  return(x)
+}
+ccent(strength_clusters$cluster)
+
+#strength_clusters$cluster
+#The real classification
+scatterplot3d(strength_z$Superplasticizer ,strength_z$Cement,strength_z$Water, color=ConcreteData$Class,xlab = "Superplasticizer",ylab="Water", zlab="Cement",type = "p", angle = 45)
+
+#Classification by data
+scatterplot3d(strength_z$Superplasticizer ,strength_z$Cement,strength_z$Water, color=strength_clusters$cluster,xlab = "Superplasticizer",ylab="Water", zlab="Cement",type = "p", angle = 45)
+
+#Plot
+plot(strength_z$Water,strength_z$Cement,col=strength_clusters$cluster,xlab = "Water(z-score)",ylab="Cement(z-score)",main="Clustering water/Cement ratio")
+
+points(strength_clusters$centers[1,1],strength_clusters$centers[1,4],col=1,pch=8,cex=2)
+points(strength_clusters$centers[2,1],strength_clusters$centers[2,4],col=3,pch=8,cex=2)
+points(strength_clusters$centers[3,1],strength_clusters$centers[3,4],col=2,pch=8,cex=2)
+
+#1 is low strength concrete(black)
+#3 is medium strength(red)
+#2 is high strength(green)
+
+
+#Plotcalssification
+plot(strength_z$Water,strength_z$Cement,col=ConcreteData$Class,xlab = "Water(z-score)",ylab="Cement(z-score)",main="Classification water/Cement ratio")
+
+#See k=? Clsutering Concrete
+planets <- strength_z
+planet_mclust <- strength_clusters$cluster
+
+rge <- apply(planets, 2, max) - apply(planets, 2, min)
+planet.dat <- sweep(planets, 2, rge, FUN = "/")
+n <- nrow(planet.dat)
+wss <- rep(0, 10)
+wss[1] <- (n - 1) * sum(apply(planet.dat, 2, var))
+for (i in 2:10)
+  wss[i] <- sum(kmeans(planet.dat,
+  centers = i)$withinss)
+
+plot(1:10, wss, type = "b", xlab = "Number of Clusters k", ylab="Within Group sum of Square Error",main = "Elbow Method Concrete")
+
+#plot(planet_mclust, planet.dat, what = "BIC", col = "black", ylab = "-BIC")
+```
+
+#Voting Part
+```{r}
+#Voting does not need scale
+cluster_vz <- as.data.frame(lapply(v_source,scale))
+ptm <- proc.time()
+Voting_clusters <- kmeans(cluster_vz,2)
+proc.time()-ptm
+
+Voting_clusters$size
+Voting_clusters$centers
+classError(Voting_clusters$cluster,Voting$Class)
+adjustedRandIndex(Voting_clusters$cluster,Voting$Class)
+
+ccent2 <- function(cl) {
+  f <- function(i) colMeans(Voting[cl == i,])
+  x <- sapply(sort(unique(cl)), f)
+  colnames(x) <- sort(unique(cl))
+  return(x)
+}
+
+ccent2(Voting_clusters$cluster)
+
+#See k=? Clsutering Concrete
+planets <- Voting
+planet_mclust <- Voting_clusters$cluster
+
+rge <- apply(planets, 2, max) - apply(planets, 2, min)
+planet.dat <- sweep(planets, 2, rge, FUN = "/")
+n <- nrow(planet.dat)
+wss <- rep(0, 10)
+wss[1] <- (n - 1) * sum(apply(planet.dat, 2, var))
+for (i in 2:10)
+  wss[i] <- sum(kmeans(planet.dat,
+  centers = i)$withinss)
+
+plot(1:10, wss, type = "b", xlab = "Number of Clusters k", ylab="Within Group sum of Square Error",main = "Elbow Method Voting")
+
+
+#plot(planet_mclust, planet.dat, what = "BIC", col = "black", ylab = "-BIC")
+```
+
+
+#EM clustering
+```{r}
+#Concrete
+strength_clusters2 <- Mclust(strength_z,G=1:10)
+summary(strength_clusters2)
+
+plot(strength_clusters2)
+
+#Voting
+voting_clusters2 <- Mclust(cluster_vz,G=1:10)
+summary(voting_clusters2)
+
+#MclustBIC and its summary function
+#c
+concreteBIC <- mclustBIC(strength_z,G=3)
+concreteSummary <- summary(concreteBIC, data = strength_z)
+#v
+votingBIC <- mclustBIC(cluster_vz,G=2)
+votingSummary <- summary(votingBIC, data = cluster_vz)
+
+#
+ptm <- proc.time()
+concrete_EEE <- Mclust(strength_z,modelNames="EEV",G=3,control=emControl(tol=c(1.e-24,sqrt(.Machine$double.eps))))
+proc.time()-ptm
+
+table(concrete_EEE$classification)
+ccent(concrete_EEE$classification)
+classError(concrete_EEE$classification, ConcreteData$Class)
+adjustedRandIndex(concrete_EEE$classification, ConcreteData$Class)
+
+#Voting
+ptm <- proc.time()
+Voting_EEE <- Mclust(cluster_vz,modelNames="EVE",G=2,control=emControl(tol=c(1.e-6,sqrt(.Machine$double.eps))))
+proc.time()-ptm
+
+table(Voting_EEE$classification)
+ccent2(Voting_EEE$classification)
+classError(Voting_EEE$classification,Voting$Class)
+adjustedRandIndex(Voting_EEE$classification,Voting$Class)
+
+
+#Plotcalssification
+#Concrete
+plot(strength_z$Water,strength_z$Cement,col=concrete_EEE$classification,xlab = "Water(z-score)",ylab="Cement(z-score)",main="Clustering EM")
+
+plot(strength_z$Water,strength_z$Cement,col=strength_clusters$cluster,xlab = "Water(z-score)",ylab="Cement(z-score)",main="Clustering k-mean")
+
+points(strength_clusters$centers[1,1],strength_clusters$centers[1,4],col=1,pch=8,cex=2)
+points(strength_clusters$centers[2,1],strength_clusters$centers[2,4],col=3,pch=8,cex=2)
+points(strength_clusters$centers[3,1],strength_clusters$centers[3,4],col=2,pch=8,cex=2)
+```
+
+#PCA
+```{r}
+#Concrete
+Concrete_pca <- prcomp(strength_z)
+c_pca <- Concrete_pca$x[,1:5]
+
+#k-mean
+c_pca_cluster <- kmeans(c_pca,3)
+classError(c_pca_cluster$cluster, ConcreteData$Class)
+adjustedRandIndex(c_pca_cluster$cluster, ConcreteData$Class)
+#EM
+ptm <- proc.time()
+concrete_EEE_pca <- Mclust(c_pca,modelNames="EEV",G=3)
+proc.time()-ptm
+classError(concrete_EEE_pca$classification, ConcreteData$Class)
+adjustedRandIndex(concrete_EEE_pca$classification, ConcreteData$Class)
+
+c_s <- summary(Concrete_pca)
+gg <- c_s$importance
+
+plot(gg[3,],type = "b", xlab="Number of PC",ylab="Explained Variance",main ="PCA Concrete")
+```
+#Voting PCA
+```{r}
+voting_pca <- prcomp(cluster_vz)
+v_pca <- voting_pca$x[,1:7]
+
+#k-mean
+v_pca_cluster <- kmeans(v_pca,2)
+classError(v_pca_cluster$cluster, Voting$Class)
+adjustedRandIndex(v_pca_cluster$cluster, Voting$Class)
+#EM
+ptm <- proc.time()
+voting_EEE_pca <- Mclust(v_pca,modelNames="EVE",G=2)
+proc.time()-ptm
+classError(voting_EEE_pca$classification, Voting$Class)
+adjustedRandIndex(voting_EEE_pca$classification, Voting$Class)
+
+
+v_s <- summary(voting_pca)
+gg2 <- v_s$importance
+
+plot(gg2[3,],type = "b", xlab="Number of PC",ylab="Explained Variance",main="PCA Voting")
+
+plot(Concrete_pca)
+plot(voting_pca)
+biplot(Concrete_pca,col = c("grey", "black"))
+biplot(voting_pca,col = c("grey", "black"))
+```
+
+#ICA
+```{r}
+c <- matrix(nrow=4,ncol=1)
+c <- as.vector(c)
+
+concrete_ica <- icafast(strength_z,n=4)
+concrete_ica_s <- concrete_ica$S
+
+#Concrete  
+for (a in 1:4){
+g <- mean(kurtosis(concrete_ica_s[,a]))
+c[a] <- g
+}
+
+plot(c，type="b",ylab="Kurtosis",xlab="Components")
+
+#Selection
+c_ica <- concrete_ica_s[,c(1,4)]
+
+#Evaluation
+#k-mean
+c_ica_cluster <- kmeans(concrete_ica_s,3)
+classError(c_ica_cluster$cluster, ConcreteData$Class)
+adjustedRandIndex(c_ica_cluster$cluster, ConcreteData$Class)
+#EM
+ptm <- proc.time()
+concrete_EEV_ica <- Mclust(c_ica,modelNames="EEV",G=3)
+proc.time()-ptm
+classError(concrete_EEV_ica$classification, ConcreteData$Class)
+adjustedRandIndex(concrete_EEV_ica$classification, ConcreteData$Class)
+
+#Plotting
+plot(c_ica[,1],c_ica[,2],col=concrete_EEV_ica$classification,xlab="ICA feature 1",ylab="ICA feature 2",main="EM method with Reduction")
+
+cor(c_ica[,1],ConcreteData[,1]/ConcreteData[,4])
+
+#Voting
+b <- matrix(nrow=8,ncol=1)
+b <- as.vector(b)
+
+voting_ica <- icafast(cluster_vz,n=8)
+Voting_ica_s <- voting_ica$S
+
+for (a in 1:8){
+g <- mean(kurtosis(Voting_ica_s[,a]))
+b[a] <- g
+}
+
+plot(b，type="b",ylab="Kurtosis",xlab="Components")
+
+#Selection
+v_ica <- Voting_ica_s[,c(6,7,8)]
+
+#Evaluation
+#k-mean
+v_ica_cluster <- kmeans(Voting_ica_s,2)
+classError(v_ica_cluster$cluster, Voting$Class)
+adjustedRandIndex(v_ica_cluster$cluster, Voting$Class)
+#EM
+ptm <- proc.time()
+Voting_EVE_ica <- Mclust(Voting_ica_s,modelNames="EVE",G=2)
+proc.time()-ptm
+classError(Voting_EVE_ica$classification, Voting$Class)
+adjustedRandIndex(Voting_EVE_ica$classification, Voting$Class)
+
+```
+
+#RCA
+```{r}
+install.packages("devtools")
+library(devtools)
+install_github("chappers/randomProjection")
+library(randomProjection)
+
+##Concrete
+mydf <- strength_z
+rp <- RandomProjection(mydf, n_features=4, eps=0.1)
+
+#k-mean
+concrete_RCA <- kmeans(rp$RP,3)
+classError(concrete_RCA$cluster, ConcreteData$Class)
+adjustedRandIndex(concrete_RCA$cluster, ConcreteData$Class)
+#EM
+ptm <- proc.time()
+Concrete_EVE_ica <- Mclust(rp$RP,modelNames="EEV",G=3)
+proc.time()-ptm
+classError(Concrete_EVE_ica $classification, ConcreteData$Class)
+adjustedRandIndex(Concrete_EVE_ica $classification, ConcreteData$Class)
+
+##Voting
+rpv <- RandomProjection(cluster_vz, n_features=8, eps=0.1)
+
+#k-mean
+voting_RCA <- kmeans(rpv$RP,2)
+classError(voting_RCA$cluster, Voting$Class)
+adjustedRandIndex(voting_RCA$cluster, Voting$Class)
+#EM
+ptm <- proc.time()
+voting_Eve_ica <- Mclust(rpv$RP,modelNames="EVE",G=2)
+proc.time()-ptm
+classError(voting_Eve_ica $classification, Voting$Class)
+adjustedRandIndex(voting_Eve_ica$classification, Voting$Class)
+
+```
+
+#TSNE
+##concrete
+```{r}
+install.packages("tsne")
+library(tsne)
+
+concrete_tsne <- tsne(strength_z, k=4, initial_dims = 4,max_iter = 200)
+
+#K-mean
+c_tsne <- kmeans(concrete_tsne,3)
+classError(c_tsne$cluster, ConcreteData$Class)
+adjustedRandIndex(c_tsne$cluster, ConcreteData$Class)
+#EM
+ptm <- proc.time()
+C_EEV_tsne <- Mclust(concrete_tsne,modelNames="EEV",G=3)
+proc.time()-ptm
+classError(C_EEV_tsne$classification, ConcreteData$Class)
+adjustedRandIndex(C_EEV_tsne$classification, ConcreteData$Class)
+
+```
+
+##voting
+```{r}
+voting_tsne <- tsne(cluster_vz, k=8, initial_dims = 16,max_iter = 200)
+
+#k-mean
+v_tsne <- kmeans(voting_tsne,2)
+classError(v_tsne$cluster, Voting$Class)
+adjustedRandIndex(v_tsne$cluster, Voting$Class)
+#EM
+ptm <- proc.time()
+voting_Eve_tsne <- Mclust(voting_tsne,modelNames="EVE",G=2)
+proc.time()-ptm
+classError(voting_Eve_tsne$classification, Voting$Class)
+adjustedRandIndex(voting_Eve_tsne$classification, Voting$Class)
+
+```
+
+#NNT
+```{r}
+install.packages("nnet")
+install.packages("caret")
+install.packages("e1071")
+
+library(nnet)
+library(caret)
+library(e1071)
+
+ConcreteData2 <- read.csv("ConcreteData 2.csv")
+
+
+
+#No Reduction
+set.seed(1234)
+Concrete_rand <- ConcreteData2[order(runif(nrow(ConcreteData2))), ]
+length_c <- 0.8*nrow(Concrete_rand)
+c_tree_train <- Concrete_rand[1:length_c, ]
+c_tree_test  <- Concrete_rand[length_c:nrow(ConcreteData2), ]
+####
+ptm <- proc.time()
+c_net_model <- nnet(c_tree_train$Class ~ .,data=c_tree_train[-9], size = 15,decay=0.4,maxit = 500)
+proc.time()-ptm
+c_net_predict <- predict(c_net_model, c_tree_test, type = "class")
+postResample(c_net_predict, c_tree_test$Class)
+
+
+```
+
+##Concrete PCA
+```{r}
+New_PCA <- cbind(c_pca,ConcreteData2["Class"])
+New_PCA2 <- cbind(c_pca,c_pca_cluster$cluster)
+New_PCA2 <- cbind(New_PCA2,ConcreteData2["Class"])
+
+set.seed(1234)
+Random_c <- New_PCA[order(runif(nrow(New_PCA ))),]
+length_c <- 0.8*nrow(Random_c)
+PCA_train <- Random_c[1:length_c, ]
+pcA_test  <- Random_c[length_c:nrow(c_pca), ]
+#############
+set.seed(1234)
+Random_c2 <- New_PCA2[order(runif(nrow(New_PCA2))),]
+length_c <- 0.8*nrow(Random_c2)
+PCA_train2 <- Random_c2[1:length_c, ]
+pcA_test2  <- Random_c2[length_c:nrow(Random_c2 ), ]
+
+#Built Model
+ptm <- proc.time()
+PCA_model <- nnet(PCA_train$Class~.,data=PCA_train[-6], size = 15,decay=0.4,maxit = 1000)
+proc.time()-ptm
+PCA_predict <- predict(PCA_model,pcA_test, type = "class")
+postResample(PCA_predict, pcA_test$Class)
+#Built Model ---Consider Cluster
+ptm <- proc.time()
+PCA_model2 <- nnet(PCA_train2$Class~.,data=PCA_train2[-7], size = 15,decay=0.4,maxit = 1000)
+proc.time()-ptm
+PCA_predict2 <- predict(PCA_model2,pcA_test2, type = "class")
+postResample(PCA_predict2, pcA_test2$Class)
+
+```
+
+
+##Concrete ICA
+```{r}
+New_ICA <- cbind(c_ica,ConcreteData2["Class"])
+New_ICA2 <- cbind(c_ica,concrete_EEV_ica$classification)
+New_ICA2 <- cbind(New_ICA2,ConcreteData2["Class"])
+
+set.seed(1234)
+Random_ica <- New_ICA[order(runif(nrow(New_ICA ))),]
+length_c <- 0.8*nrow(Random_ica )
+ICA_train <- Random_ica [1:length_c, ]
+IcA_test  <- Random_ica [length_c:nrow(Random_ica), ]
+#########
+set.seed(1234)
+Random_c2 <- New_ICA2[order(runif(nrow(New_ICA2))),]
+length_c <- 0.8*nrow(Random_c2)
+ICA_train2 <- Random_c2[1:length_c, ]
+ICA_test2  <- Random_c2[length_c:nrow(Random_c2 ), ]
+
+#Test
+ptm <- proc.time()
+ICA_model <- nnet(ICA_train$Class~.,data=ICA_train[-3], size = 15,decay=0.4,maxit = 1000)
+proc.time()-ptm
+ICA_predict <- predict(ICA_model,IcA_test, type = "class")
+postResample(ICA_predict, IcA_test$Class)
+
+#Test with Clustering
+ptm <- proc.time()
+IcA_model2 <- nnet(ICA_train2$Class~.,data=ICA_train2[-4], size = 15,decay=0.4,maxit = 1000)
+proc.time()-ptm
+IcA_predict2 <- predict(IcA_model2,ICA_test2, type = "class")
+postResample(IcA_predict2, ICA_test2$Class)
+
+```
+
+
+#RCA
+```{r}
+New_RCA <- cbind(rp$RP,ConcreteData2["Class"])
+New_RCA2 <- cbind(rp$RP,concrete_RCA$cluster)
+New_RCA2 <- cbind(New_RCA2,ConcreteData2["Class"])
+
+set.seed(1234)
+Random_RCA <- New_RCA[order(runif(nrow(New_RCA ))),]
+length_c <- 0.8*nrow(Random_RCA )
+RCA_train <- Random_RCA [1:length_c, ]
+RCA_test  <- Random_RCA [length_c:nrow(Random_RCA), ]
+####
+set.seed(1234)
+Random_RCA2 <- New_RCA2[order(runif(nrow(New_RCA2))),]
+length_c <- 0.8*nrow(Random_RCA2)
+RCA_train2 <- Random_RCA2[1:length_c, ]
+RCA_test2  <- Random_RCA2[length_c:nrow(Random_RCA2 ), ]
+
+
+#Test
+ptm <- proc.time()
+RCA_model <- nnet(RCA_train$Class~.,data=RCA_train[-5], size = 15,decay=0.4,maxit = 1000)
+proc.time()-ptm
+RCA_predict <- predict(RCA_model,RCA_test, type = "class")
+postResample(RCA_predict, RCA_test$Class)
+######
+ptm <- proc.time()
+RCA_model2 <- nnet(RCA_train2$Class~.,data=RCA_train2[-6], size = 15,decay=0.4,maxit = 1000)
+proc.time()-ptm
+RCA_predict2 <- predict(RCA_model2,RCA_test2, type = "class")
+postResample(RCA_predict2, RCA_test2$Class)
+
+```
+
+
+#TSNE
+```{r}
+New_TSNE <- cbind(concrete_tsne,ConcreteData2["Class"])
+New_TSNE2 <- cbind(concrete_tsne,c_tsne$cluster)
+New_TSNE2 <- cbind(New_TSNE2 ,ConcreteData2["Class"])
+
+set.seed(1234)
+Random_TSNE <- New_TSNE[order(runif(nrow(New_RCA ))),]
+length_c <- 0.8*nrow(Random_TSNE )
+TSNE_train <- Random_TSNE [1:length_c, ]
+TSNE_test  <- Random_TSNE [length_c:nrow(Random_TSNE), ]
+######
+set.seed(1234)
+Random_TSNE2 <- New_TSNE2[order(runif(nrow(New_TSNE2))),]
+length_c <- 0.8*nrow(Random_TSNE2)
+TSNE_train2 <- Random_TSNE2[1:length_c, ]
+TSNE_test2  <- Random_TSNE2[length_c:nrow(Random_TSNE2 ), ]
+
+
+#Test
+ptm <- proc.time()
+TSNE_model <- nnet(TSNE_train$Class~.,TSNE_train[-5], size = 15,decay=0.4,maxit = 1000)
+proc.time()-ptm
+TSNE_predict <- predict(TSNE_model,TSNE_test, type = "class")
+postResample(TSNE_predict , TSNE_test$Class)
+
+###Including Clustering
+ptm <- proc.time()
+TSNE_model2 <- nnet(TSNE_train2$Class~.,TSNE_train2[-6], size = 15,decay=0.4,maxit = 1000)
+proc.time()-ptm
+TSNE_predict2 <- predict(TSNE_model2,TSNE_test2, type = "class")
+postResample(TSNE_predict2 , TSNE_test2$Class)
+
+```
+
+
