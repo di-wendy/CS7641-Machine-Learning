@@ -3,8 +3,6 @@
    Used R Version (3.2.3)
 
    Support tool weka (Version 3.6.13)
-   
-   Github: https://github.com/di-wendy/HW1.git
  
 2. How to Run?
 
